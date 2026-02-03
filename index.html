@@ -195,6 +195,23 @@ video { width: 95%; max-width: 600px; border-radius: 20px; border: 2px solid #33
   box-shadow: 0 10px 25px rgba(0,0,0,0.5);
   overflow: hidden;
 }
+.flip-btn{
+  position: fixed;
+  bottom: 120px;
+  right: 30px;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border: 2px solid #fff;
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 2100;
+}
+.flip-btn:active{
+  transform: scale(0.9);
+}
 
 .options-menu button {
   padding: 12px 20px;
@@ -257,6 +274,8 @@ video { width: 95%; max-width: 600px; border-radius: 20px; border: 2px solid #33
   <video id="webcam" autoplay playsinline></video>
   <button class="capture-btn" onclick="uploadToCloud()"></button>
   <p id="status-msg"></p>
+  <button class="flip-btn" onclick="flipCamera()">⇄</button>
+
   <canvas id="canvas" style="display:none;"></canvas>
 </div>
 
@@ -303,13 +322,14 @@ const SUPABASE_KEY = 'sb_publishable_fApX0PIFhdPdYXV5RU-EZw_Xreoe4nj';
 const supa = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let stream = null;
+let currentFacingMode = "environment";
 
 // ================= CAMERA LOGIC =================
 async function startCamera() {
   const video = document.getElementById('webcam');
   try {
     stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
+      video: { facingMode: currentFacingMode } 
     });
     video.srcObject = stream;
     document.getElementById('camera-overlay').style.display = 'flex';
@@ -323,6 +343,15 @@ function stopCamera() {
   if (stream) stream.getTracks().forEach(t => t.stop());
   document.getElementById('camera-overlay').style.display = 'none';
   document.body.style.overflow = 'auto';
+}
+
+// ================= FLIP CAMERA =================
+function flipCamera() {
+  currentFacingMode =
+    currentFacingMode === "environment" ? "user" : "environment";
+
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  startCamera();
 }
 
 // ================= UPLOAD & WATERMARKING =================
