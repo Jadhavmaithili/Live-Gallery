@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Console | Camera to Cloud</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root { --primary: #fff; --bg: #000; --surface: #111; --border: #222; --accent: #3d5afe; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', system-ui, sans-serif; }
+        body { background: var(--bg); color: var(--primary); -webkit-font-smoothing: antialiased; padding: 20px; }
+
+        /* --- DASHBOARD --- */
+        #main-app { max-width: 1000px; margin: 0 auto; }
+        
+        header { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            padding: 20px 0; 
+            margin-bottom: 30px; 
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 30px; }
+        .stat-card { background: var(--surface); padding: 20px; border-radius: 16px; border: 1px solid var(--border); }
+        .stat-card small { color: #666; text-transform: uppercase; font-size: 11px; letter-spacing: 1px; }
+
+        .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+        .item { aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #1a1a1a; position: relative; border: 1px solid var(--border); }
+        .item img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .del-overlay { 
+            position: absolute; inset: 0; background: rgba(0,0,0,0.7); 
+            display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.2s;
+        }
+        .back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  margin: 15px 0 0 15px;
+  color: #888;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 600;
+  transition: 0.3s;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+
+.back-link:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+/* Mobile tweak to ensure it's not too close to the edges */
+@media (max-width: 768px) {
+  .back-link {
+    margin: 10px 0 0 10px;
+    padding: 6px 12px;
+  }
+}
+        .item:hover .del-overlay { opacity: 1; }
+        .btn-del { background: #ff4444; color: #fff; border: none; padding: 8px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+        #loading-bar { 
+            width: 100%; height: 2px; background: var(--border); position: fixed; top: 0; left: 0; overflow: hidden; 
+        }
+        #loading-bar div { height: 100%; background: var(--accent); width: 0%; transition: 0.3s; }
+
+        @media (max-width: 500px) { .gallery { grid-template-columns: repeat(2, 1fr); } }
+    </style>
+</head>
+<body>
+
+<div id="loading-bar"><div id="progress"></div></div>
+
+<div id="main-app">
+    <header>
+        <div>
+            <h1>Console</h1>
+            <p style="color: #666; font-size: 14px;">Live Event Management</p>
+        </div>
+        <button onclick="loadGallery()" style="background:var(--surface); border:1px solid var(--border); color:#fff; padding:8px 15px; border-radius:8px; cursor:pointer;">Refresh List</button>
+    </header>
+    <a href="C:\Internship\Project\index.html" class="back-link">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+  Back to Live
+</a>
+    <div class="stats">
+        <div class="stat-card">
+            <small>Total Images</small>
+            <p id="img-count" style="font-size: 24px; font-weight: bold;">--</p>
+        </div>
+        <div class="stat-card">
+            <small>Cloud Status</small>
+            <p id="status-text" style="color: #4caf50; font-size: 24px; font-weight: bold;">Connecting...</p>
+        </div>
+    </div>
+
+    <div class="gallery" id="gallery">
+        </div>
+</div>
+
+<script>
+    const SB_URL = 'https://tlcvcaddzkbezdxkwjdh.supabase.co'; 
+    const SB_KEY = 'sb_publishable_fApX0PIFhdPdYXV5RU-EZw_Xreoe4nj';
+    const supa = supabase.createClient(SB_URL, SB_KEY);
+
+    // Run immediately on page load
+    window.onload = () => {
+        loadGallery();
+    };
+
+    async function loadGallery() {
+        const progress = document.getElementById('progress');
+        const status = document.getElementById('status-text');
+        const gallery = document.getElementById('gallery');
+        
+        progress.style.width = '30%';
+        status.innerText = "Fetching...";
+
+        const { data, error } = await supa.storage.from('C2C').list('', { 
+            sortBy: { column: 'created_at', order: 'desc' } 
+        });
+
+        progress.style.width = '70%';
+
+        if (error) {
+            console.error(error);
+            status.innerText = "Error";
+            status.style.color = "#ff4444";
+            gallery.innerHTML = `<p style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">Failed to load cloud data. Check if bucket is Public.</p>`;
+            return;
+        }
+        
+        const files = data.filter(f => f.name !== '.emptyFolderPlaceholder');
+        document.getElementById('img-count').innerText = files.length;
+        status.innerText = "Online";
+        status.style.color = "#4caf50";
+
+        if (files.length === 0) {
+            gallery.innerHTML = `<p style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">No images found in cloud storage.</p>`;
+        } else {
+            gallery.innerHTML = files.map(file => {
+                const { data: { publicUrl } } = supa.storage.from('C2C').getPublicUrl(file.name);
+                return `<div class="item">
+                    <img src="${publicUrl}" loading="lazy">
+                    <div class="del-overlay"><button class="btn-del" onclick="deleteImg('${file.name}')">Delete</button></div>
+                </div>`;
+            }).join('');
+        }
+
+        progress.style.width = '100%';
+        setTimeout(() => { progress.style.width = '0%'; }, 500);
+    }
+
+    async function deleteImg(name) {
+        if (!confirm("Permanently delete from cloud?")) return;
+        const { error } = await supa.storage.from('C2C').remove([name]);
+        if (error) alert("Error deleting: " + error.message);
+        loadGallery();
+    }
+</script>
+</body>
+</html>
