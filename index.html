@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Camera to Cloud Live Gallery</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+/* ================= YOUR ORIGINAL DESIGN ================= */
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:#000;
+  color:#fff;
+  font-family:Inter,system-ui,Arial,sans-serif;
+  overflow-x:hidden;
+}
+
+nav{
+  position:fixed;
+  top:0;
+  width:100%;
+  padding:18px 60px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:rgba(0,0,0,.75);
+  backdrop-filter:blur(14px);
+  z-index:1000;
+}
+
+.nav-brand{ font-size:20px; font-weight:700; color:#fff; }
+.nav-links{ display:flex; gap:28px; }
+.nav-links a{ font-size:15px; color:#ccc; text-decoration:none; position:relative; transition:.3s; }
+.nav-links a:hover, .nav-links a.active{ color:#fff; }
+.nav-links a::after{ content:""; position:absolute; left:0; bottom:-6px; width:0%; height:2px; background:#fff; transition:.3s; }
+.nav-links a:hover::after, .nav-links a.active::after{ width:100%; }
+.nav-toggle{ display:none; font-size:26px; color:#fff; cursor:pointer; }
+
+.hero{
+  height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding:0 24px;
+  background: linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,.85)), url("https://images.unsplash.com/photo-1516035069371-29a1b244cc32") center/cover no-repeat;
+}
+.hero-content{ max-width:900px; animation:fadeUp 1.4s ease forwards; }
+.hero h1{font-size:60px;margin-bottom:18px}
+.hero p{font-size:18px;color:#ddd}
+.hero-btns { margin-top: 35px; display: flex; gap: 20px; justify-content: center; }
+
+.hero button{
+  padding:16px 46px; border-radius:50px; border:none; background:#fff;
+  color:#000; cursor:pointer; transition:.4s; font-weight: 600;
+}
+.hero button:hover{ transform:scale(1.07); box-shadow:0 0 40px rgba(255,255,255,.4); }
+
+.main{
+  min-height:90vh; display:flex; align-items:center; padding:0 80px;
+  background: linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.9)), url("https://images.unsplash.com/photo-1519225421980-715cb0215aed?auto=format&fit=crop&w=1600&q=80") center/cover no-repeat;
+}
+.main h2{font-size:52px;margin-bottom:20px}
+.main p{max-width:700px;color:#ccc;font-size:18px}
+
+section{padding:140px 80px}
+.features{ display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:50px; }
+.card{
+  background-size:cover; background-position:center; border-radius:26px; padding:44px; position:relative;
+  opacity:0; transform:translateY(60px); transition:1s cubic-bezier(.19,1,.22,1);
+}
+.card::before{ content:""; position:absolute; inset:0; background:linear-gradient(rgba(0,0,0,.6),rgba(0,0,0,.9)); }
+.card *{position:relative;z-index:2}
+.card.show{opacity:1;transform:translateY(0)}
+.card h3{font-size:22px;margin-bottom:14px}
+.card p{color:#ddd;line-height:1.7}
+
+.card.camera{background-image:url("https://images.unsplash.com/photo-1516035069371-29a1b244cc32")}
+.card.cloud{background-image:url("https://images.unsplash.com/photo-1451187580459-43490279c0fa")}
+.card.processing{background-image:url("https://images.unsplash.com/photo-1555949963-aa79dcee981c")}
+.card.mobile{background-image:url("https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f")}
+.card.admin{background-image:url("https://images.unsplash.com/photo-1556155092-8707de31f9c4")}
+
+.sticky{
+  position:sticky; top:0; height:100vh; display:flex; align-items:center; padding:0 80px;
+  background: linear-gradient(rgba(0,0,0,.7),rgba(0,0,0,.9)), url("https://images.unsplash.com/photo-1500530855697-b586d89ba3ee") center/cover no-repeat;
+}
+.sticky h2{font-size:52px;margin-bottom:20px}
+.sticky p{color:#ccc;max-width:520px}
+
+.flow{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:40px; }
+.flow div{ padding:32px; border-radius:20px; border:1px solid rgba(255,255,255,.15); background:rgba(0,0,0,.6); text-align:center; transition:.4s; }
+.flow div:hover{ transform:translateY(-10px); background:rgba(255,255,255,.05); }
+
+.cta{ background:#111; text-align:center; }
+.cta h2{font-size:48px}
+.cta button{ margin-top:30px; padding:18px 50px; border-radius:50px; border:none; background:#fff; color:#000; cursor:pointer; transition:.4s; }
+
+footer{ padding:40px; text-align:center; color:#777; font-size:14px; }
+
+/* ================= CAMERA & GALLERY UI ================= */
+#camera-overlay, #gallery-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 2000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#gallery-overlay { 
+  background: #000; 
+  padding-top: 80px;
+  overflow-y: auto;
+  justify-content: flex-start;
+}
+
+video { width: 95%; max-width: 600px; border-radius: 20px; border: 2px solid #333; }
+
+.close-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #fff;
+  color: #000;
+  padding: 10px 20px;
+  border-radius: 30px;
+  cursor: pointer;
+  font-weight: bold;
+  z-index: 2100;
+}
+
+.capture-btn {
+  margin-top: 20px;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 5px solid #fff;
+  background: transparent;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.capture-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.3); }
+
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  width: 100%;
+  padding: 5px;
+}
+
+.photo-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: #111;
+}
+
+.photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.options-btn {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+  font-size: 18px;
+}
+
+.options-menu {
+  display: none;
+  position: absolute;
+  top: 35px;
+  right: 5px;
+  background: #fff;
+  border-radius: 8px;
+  z-index: 10;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+  overflow: hidden;
+}
+
+.options-menu button {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  color: #000;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+@media(max-width:768px){
+  .photo-grid { 
+    grid-template-columns: repeat(3, 1fr) !important; 
+    gap: 2px !important; 
+    padding: 2px !important;
+  }
+  .photo-item { border-radius: 0px; }
+  .nav-links { width: 80%; background: rgba(0,0,0,0.95); }
+}
+.options-menu button:hover { background: #f0f0f0; }
+.options-menu button.del-btn { color: #ff3b3b; }
+
+#status-msg { margin-top: 15px; font-size: 14px; color: #0f0; font-weight: bold; }
+
+@keyframes fadeUp{ from{opacity:0;transform:translateY(40px)} to{opacity:1;transform:translateY(0)} }
+
+@media(max-width:768px){
+  nav{padding:16px 24px}
+  .nav-links{ position:absolute; top:70px; right:0; background:rgba(0,0,0,.9); flex-direction:column; gap:20px; padding:20px; width:200px; display:none; border-radius:8px; }
+  .nav-links.show{display:flex}
+  .nav-toggle{display:block}
+  .hero h1{font-size:38px}
+  section{padding:90px 24px}
+}
+</style>
+</head>
+
+<body>
+
+<nav>
+  <div class="nav-brand">📸 C2C Live</div>
+  <div class="nav-toggle" id="nav-toggle">☰</div>
+  <div class="nav-links" id="nav-links">
+    <a href="#hero">Home</a>
+    
+    <a href="#workflow">Workflow</a>
+    <div class="nav-links" id="nav-links">
+  <a href="#features" class="active">Features</a>
+  <a href="javascript:void(0)" onclick="document.getElementById('file-upload').click()">Add Photos</a>
+ 
+  <input type="file" id="file-upload" accept="image/*" multiple style="display:none" onchange="handleFileUpload(event)">
+</div>
+    <a href="C:\Internship\Project\admin.html">Admin Panel</a>
+  </div>
+</nav>
+
+<div id="camera-overlay">
+  <div class="close-btn" onclick="stopCamera()">✕ Close</div>
+  <video id="webcam" autoplay playsinline></video>
+  <button class="capture-btn" onclick="uploadToCloud()"></button>
+  <p id="status-msg"></p>
+  <canvas id="canvas" style="display:none;"></canvas>
+</div>
+
+<div id="gallery-overlay">
+  <div class="close-btn" onclick="closeGallery()">✕ Close</div>
+  <h2 style="text-align:center; width:100%; margin: 20px 0;">Cloud Gallery</h2>
+  <div class="photo-grid" id="photo-grid"></div>
+</div>
+
+<section class="hero" id="hero">
+  <div class="hero-content">
+    <h1>Real-Time Camera to Cloud</h1>
+    <p>Captured moments appear instantly in the live event gallery.</p>
+    <div class="hero-btns">
+      <button onclick="startCamera()">Camera</button>
+      <button onclick="openGallery()" style="background:transparent; border:2px solid #fff; color:#fff;">View Photos</button>
+    </div>
+  </div>
+</section>
+
+<main class="main" id="workflow">
+  <div>
+    <h2>Live Events. Live Galleries.</h2>
+    <p>Captured moments are uploaded, processed, and delivered instantly.</p>
+  </div>
+</main>
+
+<section id="features">
+  <div class="features">
+    <div class="card camera"><h3>Camera Upload</h3><p>Automatic camera-to-cloud sync.</p></div>
+    <div class="card cloud"><h3>Cloud Storage</h3><p>Secure & scalable infrastructure.</p></div>
+    <div class="card processing"><h3>AI Processing</h3><p>Watermarking & face tagging.</p></div>
+    <div class="card mobile"><h3>Guest Access</h3><p>Instant digital delivery.</p></div>
+    <div class="card admin"><h3>Admin Panel</h3><p>Event & media management.</p></div>
+  </div>
+</section>
+
+<footer>© 2026 Camera-to-Cloud Live Gallery</footer>
+
+<script>
+// ================= SUPABASE CONFIG =================
+const SUPABASE_URL = 'https://tlcvcaddzkbezdxkwjdh.supabase.co'; 
+const SUPABASE_KEY = 'sb_publishable_fApX0PIFhdPdYXV5RU-EZw_Xreoe4nj';
+const supa = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let stream = null;
+
+// ================= CAMERA LOGIC =================
+async function startCamera() {
+  const video = document.getElementById('webcam');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } 
+    });
+    video.srcObject = stream;
+    document.getElementById('camera-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  } catch (e) {
+    alert("Enable camera permissions.");
+  }
+}
+
+function stopCamera() {
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  document.getElementById('camera-overlay').style.display = 'none';
+  document.body.style.overflow = 'auto';
+}
+
+// ================= UPLOAD & WATERMARKING =================
+// Function for the "Add Photos" section
+async function handleFileUpload(event) {
+    const files = event.target.files;
+    if (!files.length) return;
+
+    // Visual feedback for mobile users
+    const uploadBtn = event.target.previousElementSibling;
+    const originalText = uploadBtn.innerText;
+    uploadBtn.innerText = "Uploading...";
+    
+    for (let file of files) {
+        const fileName = `manual_${Date.now()}_${file.name}`;
+        await supa.storage.from('C2C').upload(fileName, file);
+    }
+    
+    uploadBtn.innerText = originalText;
+    alert("Photos added to Cloud!");
+    openGallery(); // Automatically show them in the Cloud section
+}
+async function uploadToCloud() {
+  const video = document.getElementById('webcam');
+  const canvas = document.getElementById('canvas');
+  const msg = document.getElementById('status-msg');
+  const ctx = canvas.getContext('2d');
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+
+  // Apply Watermark
+  ctx.font = "bold 24px Inter";
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.fillText("C2C LIVE", 20, canvas.height - 20);
+
+  canvas.toBlob(async (blob) => {
+    const fileName = `img_${Date.now()}.png`;
+    msg.innerText = "Syncing to Cloud...";
+
+    const { error } = await supa.storage.from('C2C').upload(fileName, blob);
+
+    if (error) {
+      msg.innerText = "Upload failed!";
+    } else {
+      msg.innerText = "Synced Successfully!";
+      setTimeout(() => { msg.innerText = ""; openGallery(); }, 1000);
+    }
+  }, 'image/png');
+}
+
+// ================= GALLERY LOGIC =================
+async function openGallery() {
+  const grid = document.getElementById('photo-grid');
+  grid.innerHTML = '<p style="text-align:center; width:100%; color:#888; padding-top:40px;">Fetching cloud...</p>';
+  document.getElementById('gallery-overlay').style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+
+  const { data, error } = await supa.storage.from('C2C').list('', {
+    limit: 100,
+    sortBy: { column: 'created_at', order: 'desc' }
+  });
+
+  if (error || !data) {
+    grid.innerHTML = "Error loading gallery.";
+    return;
+  }
+
+  grid.innerHTML = ''; 
+
+  data.forEach(file => {
+    if (file.name === '.emptyFolderPlaceholder') return;
+    const { data: urlData } = supa.storage.from('C2C').getPublicUrl(file.name);
+    const safeId = file.id ? file.id.replace(/[^a-z0-9]/gi, '') : Math.random().toString(36).substring(7); 
+
+    const item = document.createElement('div');
+    item.className = 'photo-item';
+    item.innerHTML = `
+      <img src="${urlData.publicUrl}" loading="lazy">
+      <div class="options-btn" onclick="toggleMenu(event, '${safeId}')">⋮</div>
+      <div class="options-menu" id="menu-${safeId}">
+        <button onclick="window.open('${urlData.publicUrl}', '_blank')">View Full</button>
+        <button class="del-btn" onclick="deletePhoto('${file.name}')">Delete</button>
+      </div>
+    `;
+    grid.appendChild(item);
+  });
+}
+
+function toggleMenu(event, id) {
+  event.stopPropagation();
+  const menu = document.getElementById('menu-' + id);
+  const allMenus = document.querySelectorAll('.options-menu');
+  allMenus.forEach(m => { if(m !== menu) m.style.display = 'none'; });
+  menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+}
+
+window.onclick = () => {
+  document.querySelectorAll('.options-menu').forEach(m => m.style.display = 'none');
+};
+
+async function deletePhoto(name) {
+  if (!confirm("Delete from cloud storage?")) return;
+  const { error } = await supa.storage.from('C2C').remove([name]);
+  if (!error) openGallery();
+}
+
+function closeGallery() {
+  document.getElementById('gallery-overlay').style.display = 'none';
+  document.body.style.overflow = 'auto';
+}
+
+// ================= UI HELPERS =================
+const cards=document.querySelectorAll('.card');
+const observer=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting)e.target.classList.add('show'); });
+},{threshold:0.1});
+cards.forEach(c=>observer.observe(c));
+
+document.getElementById('nav-toggle').onclick = () => {
+  document.getElementById('nav-links').classList.toggle('show');
+};
+</script>
+</body>
+</html>
